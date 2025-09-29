@@ -5,7 +5,7 @@ from pybaseball import statcast
 import sys
 
 if len(sys.argv) != 4:
-    print("Usage: python3 GetData.py <start_date> <end_date> <file_path>")
+    print("Usage: python3 ./GetData.py <start_date> <end_date> <file_path>")
     sys.exit(1)
 
 start_date = sys.argv[1]
