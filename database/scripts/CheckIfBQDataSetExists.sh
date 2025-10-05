@@ -40,7 +40,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check if dataset exists
-dataset_exists=$(bq ls -d --project_id=$(gcloud config get-value project) | grep -w "$data_set")
+dataset_exists=$(bq ls -d | grep -w "$data_set")
 
 if [ -n "$dataset_exists" ]; then
    echo "Yes"
