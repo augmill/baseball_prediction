@@ -1,51 +1,16 @@
-This file is currently acting as a TODO and planning page for the database setup, but later it will contain the instrcuctions for ingesting and querying data to/from the database
+# Database Scripts Documentation
 
-## TODOs
-* Setup google cloud creditenals and project for the DB (plus requisite scripts)
-* Define a solid schema for the table (this schema could be subject to change)
-* write out the basic skeletons for all the scripts
-* implement and test the scripts
-* Do a full run through of ingesting one season of data using the scripts 
-* write up instructions on how to use the scripts
+This document provides documentation for all scripts in the `scripts/` directory.
 
-## Baic "ETL" Pipeline plan
-while this wont be an actual "pipeline" we will have a collection of scripts that facilitate data ingest and cleaning
-
-###  Pipeline Scripts
-* ETLPipeline.sh
-    * accepts two params: start date (inclusive) and end date (exclusive)
-    * will have an option where the user can provide a csv list of features they would like to exclude
-* GetData.sh
-    * accepts the same params/opts as ETLPipline.sh
-    * pulls raw data down into a csv file (probably in the /tmp directory)
-    * Once data is pulled will make a call to the Clean data script
-    * this will probably be a wrapper for a python script
-* CleanData.sh
-    * accepts the location of a raw data file as the only param
-    * will be a wrapper for a python script so we can leverage the code already written
-    * Puts the clean data into a new csv file (maybe optionally have it delete old data)
-* IngestData.sh
-    * accepts the location of a cleaned data file as input and the BigQuery table name
-    * sends the csv file to the opensearch database 
-    * maybe optionally remove cleaned data file once 
-
-### Utility Scripts ###
-* VerifyData.sh
-    - takes data file and table name as input
-    - ensure all rows/columns match schema of table
-    - maybe optionally remove bad rows
-* CheckIfIngested.sh
-    - checks if data for a certain time range has already been ingested
-    - either need to query the table or maintain a list of data thats been ingested
-* QueryTable.sh
-    - accepts table name and path to SQL file as params
-    - runs the query in the SQL file against the database
-* VerifyLogin.sh
-    - just verifies if your google cloud credintals/config are valid
-* SetupEnironment.sh
-    - installs all the dependinces needed for google cloud
-* CheckDBUsage.sh
-    - script to check if we are within the Google Big Query free tier limits for both the storage and compute layers
-* CreateTable.sh
-    - given a SQL file with a schema defintion and a table name param
-    - if the table DNE create it
+| Name | Usage | Example | Description | Notes |
+|------|-------|---------|-------------|-------|
+| CheckGCloudCredintals.sh | `./CheckGCloudCredintals.sh` | `./CheckGCloudCredintals.sh` | Verifies gcloud is installed and configured with the correct project. | Checks for gcloud CLI installation, authentication, project configuration, and application default credentials. Exits with error if any check fails. |
+| CheckIfBQDataSetExists.sh | `./CheckIfBQDataSetExists.sh [data set name]` | `./CheckIfBQDataSetExists.sh my_dataset` | Checks if a BigQuery dataset exists. | Outputs "Yes" if exists, "No" otherwise. Requires gcloud credentials. |
+| CheckIfBQTableExists.sh | `./CheckIfBQTableExists.sh [data set name] [table name]` | `./CheckIfBQTableExists.sh my_dataset my_table` | Checks if a BigQuery table exists in the specified dataset. | Outputs "Yes" if exists, "No" otherwise. Requires gcloud credentials and dataset to exist. |
+| CleanData.py | `python3 ./CleanData.py <raw data file>` | `python3 ./CleanData.py /tmp/s2025-10-09_e2025-10-09_raw.csv` | Cleans raw statcast data from pybaseball by converting non-numeric columns to ordinal values. | Processes CSV files, handles missing values, and saves cleaned data to /tmp with "_clean.csv" suffix. Uses multipledispatch for key handling. |
+| CleanData.sh | `./CleanData.sh [path to raw data file]` | `./CleanData.sh s2025-10-09_e2025-10-09_raw.csv` | Cleans raw pybaseball statcast CSV data using CleanData.py. | Wrapper script that calls CleanData.py and places cleaned files in /tmp. Should be used with GetData.sh. |
+| CreateBQDataset.sh | `./CreateBQDataset.sh [data set name]` | `./CreateBQDataset.sh my_dataset` | Creates a new BigQuery dataset. | Checks if dataset already exists before creating. Requires gcloud credentials. |
+| CreateBQTable.sh | `./CreateBQTable.sh [data set name] [table name] [path to SQL file]` | `./CreateBQTable.sh my_dataset my_new_table ./table_ddl.sql` | Creates a new BigQuery table from a SQL DDL file. | Executes the DDL query to create the table. Requires dataset to exist and gcloud credentials. |
+| GetData.py | `python3 ./GetData.py <start_date> <end_date> <file_path>` | `python3 ./GetData.py 2024-01-01 2024-01-31 /tmp/data.csv` | Pulls raw statcast data from pybaseball for a date range and saves to CSV. | Uses pybaseball's statcast function. Dates in YYYY-MM-DD format. |
+| GetData.sh | `./GetData.sh [start date (YYYY-MM-DD)] [end date (YYYY-MM-DD)]` | `./GetData.sh 2024-01-01 2024-01-31` | Pulls raw statcast data from pybaseball for a date range and saves to /tmp CSV file. | Wrapper for GetData.py. Both dates inclusive. Validates date format. |
+| UploadCSVtoBQ.sh | `./UploadCSVtoBQ.sh [data set name] [table name] [path to data file]` | `./UploadCSVtoBQ.sh my_dataset my_table /tmp/my_cleaned_data.csv` | Uploads CSV data to a BigQuery table. | Uses bq load command with CSV format options. Requires dataset and table to exist, and gcloud credentials. |
