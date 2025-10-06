@@ -8,7 +8,7 @@ To use any of our BigQuery scripts you will need a Google Cloud account and you 
 
 ### Helpful Links
 * BigQuery Documentation: https://cloud.google.com/bigquery/docs
-* BigQuery Python Client Documentation:https://cloud.google.com/python/docs/reference/bigquery/latest
+* BigQuery Python Client Documentation: https://cloud.google.com/python/docs/reference/bigquery/latest
 * BigQuery CLI tool Documentation: https://cloud.google.com/bigquery/docs/reference/bq-cli-reference
 
 
@@ -21,7 +21,6 @@ To use any of our BigQuery scripts you will need a Google Cloud account and you 
 5. After installation, authenticate with Google Cloud: `gcloud auth login`
 6. Set the project: `gcloud config set project baseball-prediction-473623`
 7. For Python scripts using the BigQuery client, run: `gcloud auth application-default login`
-8. Enable the BigQuery API for your project: `gcloud services enable bigquery.googleapis.com`
 
 **Note:** I will need to grant you some permissions so you can use the project so send me(Jackson) a text when you have your account setup.
 
