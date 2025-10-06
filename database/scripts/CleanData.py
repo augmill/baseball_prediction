@@ -1,7 +1,7 @@
 """
 Used by CleanData.sh to clean raw statcast data from pybaseball
 
-TODO: seems like there is some issue with the loading bar
+TODO: this cleaning script needs some work
 """
 import pandas as pd
 from multipledispatch import dispatch

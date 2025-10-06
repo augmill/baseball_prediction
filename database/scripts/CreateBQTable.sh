@@ -41,10 +41,10 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check that data set exists
-ds_check=$("./CheckIfBQDatasetExists.sh" "$data_set")
+ds_check=$("./CheckIfBQDataSetExists.sh" "$data_set")
 if [ $? -ne 0 ]; then
     echo "$ds_check"
-    echo "Error: CheckIfBQDatasetExists.sh failed. Exiting..."
+    echo "Error: CheckIfBQDataSetExists.sh failed. Exiting..."
     exit 1
 elif [[ "$ds_check" != "Yes" ]]; then
     echo "Error: dataset $data_set does not exist. Exiting..."
@@ -57,7 +57,7 @@ if [ $? -ne 0 ]; then
     echo "$table_check"
     echo "Error: CheckIfBQTableExists.sh failed. Exiting..."
     exit 1
-elif [[ "$ds_check" != "No" ]]; then
+elif [[ "$table_check" != "No" ]]; then
     echo "Error: table $table already exists in dataset $data_set. Exiting..."
     exit 1
 fi
@@ -75,7 +75,7 @@ if [ -z "$table_ddl" ]; then
 fi
 
 echo "Creating table $table in BigQuery dataset $data_set..."
-res=$(bq query --dataset_id="$data_set" --nouse_legacy_sql "$table_ddl")
+res=$(bq query --project_id="baseball-prediction-473623" --dataset_id="$data_set" --nouse_legacy_sql "$table_ddl")
 if [ $? -ne 0 ]; then
     echo "$res"
     echo "Error: failed to create the table $table. Exiting..."

@@ -52,7 +52,7 @@ elif [[ "$data_set_check" != "Yes" ]]; then
    exit 1
 fi
 
-table_check=$("./CheckIfBQTableExists.sh" "$table")
+table_check=$("./CheckIfBQTableExists.sh" "$data_set" "$table")
 if [ $? -ne 0 ]; then
    echo "$table_check"
    echo "Error: CheckIfBQTableExists.sh failed. Exiting..."

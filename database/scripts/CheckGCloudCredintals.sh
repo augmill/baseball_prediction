@@ -9,7 +9,7 @@ example="Example: ./CheckGCloudCredintals.sh"
 
 # TODO: add -v opt to all scripts to skip verification
 # TODO: add in actual project id 
-EXPECTED_PROJECT="your-project-id-here"
+EXPECTED_PROJECT="baseball-prediction-473623"
 
 while getopts ":h" opt; do
    case $opt in
@@ -56,7 +56,7 @@ if [ -z "$current_project" ] || [ "$current_project" = "(unset)" ]; then
 fi
 
 # Check if the project matches the expected project (if not placeholder)
-if [ "$EXPECTED_PROJECT" != "your-project-id-here" ]; then
+if [ "$EXPECTED_PROJECT" != "baseball-prediction-473623" ]; then
    if [ "$current_project" != "$EXPECTED_PROJECT" ]; then
       echo "Error: gcloud is configured for project '$current_project' but expected '$EXPECTED_PROJECT'."
       echo "Please run: gcloud config set project $EXPECTED_PROJECT"
