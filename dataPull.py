@@ -22,10 +22,11 @@ class dataProcesser():
         uses a pre-existing key and the other does not.
         '''
         print(f"Converting {' '.join(col_name.split(sep='_'))} with no key...")
-        var = 0
+        var = 1 # NOTE: changed to 1 so that 0 can be for empty values 
         key = {}
         data = self.data[col_name]
         try:
+            # with open("data/keys.jsonl") as file:
             for i, value in enumerate(tqdm(data)):
                 if pd.isna(value):
                     continue
@@ -35,6 +36,8 @@ class dataProcesser():
                     var += 1
                     self.data.at[i, col_name] = key[value]
             self.keys[col_name] = key
+            # file.dump(key)
+            # file.write("\n")
             return True
         except Exception as e:
             print(e)
@@ -108,7 +111,7 @@ class dataProcesser():
         object. Does not need .csv in the file name.\n
         Nothing is returned as it just creates a file.
         '''
-        self.data.to_csv(f"../data/{file_name}.csv")
+        self.data.to_csv(f"data/{file_name}.csv")
 
         
     

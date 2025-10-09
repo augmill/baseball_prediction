@@ -1,4 +1,13 @@
+
+# Info
+
+## Notes for everyone
+
 The dataPull.py file is really the only one that is relevant for what I have done so far but you should be able to just alter and run run.py to pull data as you want. The main goal was just to be able to translate the non-numerical values to numerical ones and create a key which is stored in the self.keys variable inside the dataProcessor object.\
 Please let me know if you have any questions or concerns. I still have a few things I want to do like removing empty columns and having a better way to handle the des column in the data. \
 This was mostly just to get some preliminary stuff so hopefully if this all looks good to you guys we can decide what we want to do and how we want to split up the work.\
 Also if you are having any issues running anything, I have added a requirements.txt file.
+
+## helpful links
+
+link to the github page
