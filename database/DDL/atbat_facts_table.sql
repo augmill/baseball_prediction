@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS `baseball-prediction-473623.statcast_data.atbat_facts` (
   ------- Game Info -------
-  game_pk INT64 NOT NULL OPTIONS(description = 'Unique Id for Game.'),
+  game_id INT64 NOT NULL OPTIONS(description = 'Unique Id for Game.'),
   game_date DATE NOT NULL OPTIONS(description = 'Date of the Game.'),
   game_type STRING NOT NULL OPTIONS(description = 'Type of Game. E = Exhibition, S = Spring Training, R = Regular Season, F = Wild Card, D = Divisional Series, L = League Championship Series, W = World Series'),
   home_team STRING NOT NULL OPTIONS(description = 'Abbreviation of home team.'),
