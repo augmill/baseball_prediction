@@ -91,10 +91,10 @@ CREATE TABLE IF NOT EXISTS `baseball-prediction-473623.statcast_data.atbat_facts
     estimated_woba_using_speedangle FLOAT64 OPTIONS(description = 'Estimated wOBA based on launch angle and exit velocity.'),
     delta_home_win_exp FLOAT64 OPTIONS(description = 'Change in Win Expectancy before vs. after the Plate Appearance.'),
     delta_run_exp FLOAT64 OPTIONS(description = 'Change in Run Expectancy before vs. after the Pitch.')
-  >> NOT NULL
+  >>
 )
 PARTITION BY game_date
-CLUSTER BY batter, game_pk
+CLUSTER BY batter, game_id
 OPTIONS (
   description = 'One row per plate appearance with full pitch sequence in a nested ARRAY<STRUCT>.',
   require_partition_filter = TRUE
