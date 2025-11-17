@@ -6,8 +6,8 @@
 #
 # Author: Jackson Cockrum
 ##############################################################
-usage="Usage: ./CreateNewBQDataSet.sh [ data set name ]"
-example="Example: ./CreateNewBQDataSet.sh my_dataset"
+usage="Usage: ./CreateBQDataSet.sh [ data set name ]"
+example="Example: ./CreateBQDataSet.sh my_dataset"
 
 while getopts ":h" opt; do
    case $opt in
