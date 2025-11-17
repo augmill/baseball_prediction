@@ -39,7 +39,7 @@ def format_data(input_clean_csv, output_jsonl):
         'pfx_x', 'pfx_z', 'release_extension', 'release_spin_rate', 'spin_axis',
         'balls', 'strikes', 'outs_when_up', 'on_3b', 'on_2b', 'on_1b',
         'home_score', 'away_score', 'bat_score', 'fld_score',
-        'post_home_score', 'post_away_score', 'post_bat_score', 'post_fld_score',
+        'post_home_score', 'post_away_score', 'post_bat_score',
         'if_fielding_alignment', 'of_fielding_alignment',
         'hit_location', 'bb_type', 'hc_x', 'hc_y', 'hit_distance',
         'launch_speed', 'launch_angle', 'launch_speed_angle',
@@ -68,6 +68,11 @@ def format_data(input_clean_csv, output_jsonl):
             at_bats_dropped += 1
             continue
         
+        # Check if events is null (required field)
+        if pd.isna(group['events'].iloc[0]):
+            at_bats_dropped += 1
+            continue
+        
         # Build at-bat level data (take first row since they're all the same for the at-bat)
         at_bat_data = {}
         for col in atbat_columns:
@@ -85,28 +90,52 @@ def format_data(input_clean_csv, output_jsonl):
         pitches = []
         for _, pitch_row in group.sort_values('pitch_number').iterrows():
             pitch_data = {}
+            
+            # Skip pitches with missing required NOT NULL fields
+            required_pitch_fields = [
+                'pitch_type', 'pitch_name', 'pitch_number', 'description', 'type',
+                'sz_top', 'sz_bot', 'des', 'release_pos_x', 'release_pos_y', 'release_pos_z',
+                'plate_x', 'plate_z', 'zone', 'release_speed', 'effective_speed',
+                'vx0', 'vy0', 'vz0', 'ax', 'ay', 'az', 'pfx_x', 'pfx_z',
+                'release_extension', 'release_spin_rate', 'spin_axis',
+                'balls', 'strikes', 'outs_when_up', 'home_score', 'away_score',
+                'bat_score', 'fld_score', 'post_home_score', 'post_away_score', 'post_bat_score',
+                'if_fielding_alignment', 'of_fielding_alignment'
+            ]
+            
+            skip_pitch = False
+            for req_field in required_pitch_fields:
+                if req_field in pitch_row.index and pd.isna(pitch_row[req_field]):
+                    skip_pitch = True
+                    break
+            
+            if skip_pitch:
+                continue
+            
             for col in pitch_columns:
                 if col in pitch_row.index:
                     val = pitch_row[col]
+                    # Rename release_spin_rate to release_spin for BQ schema
+                    output_col = 'release_spin' if col == 'release_spin_rate' else col
                     # Convert to native Python type and handle NaN
                     if pd.isna(val):
-                        pitch_data[col] = None
+                        pitch_data[output_col] = None
                     elif col in ['pitch_number', 'zone', 'release_spin_rate', 'spin_axis', 
                                 'balls', 'strikes', 'outs_when_up', 'on_3b', 'on_2b', 'on_1b',
                                 'home_score', 'away_score', 'bat_score', 'fld_score',
-                                'post_home_score', 'post_away_score', 'post_bat_score', 'post_fld_score',
+                                'post_home_score', 'post_away_score', 'post_bat_score',
                                 'hit_location', 'hit_distance', 'launch_angle', 'launch_speed_angle',
                                 'woba_denom', 'babip_value', 'iso_value']:
-                        pitch_data[col] = int(val) if not pd.isna(val) else None
+                        pitch_data[output_col] = int(val) if not pd.isna(val) else None
                     elif col in ['sz_top', 'sz_bot', 'release_pos_x', 'release_pos_y', 'release_pos_z',
                                 'plate_x', 'plate_z', 'release_speed', 'effective_speed',
                                 'vx0', 'vy0', 'vz0', 'ax', 'ay', 'az', 'pfx_x', 'pfx_z',
                                 'release_extension', 'hc_x', 'hc_y', 'launch_speed',
                                 'woba_value', 'estimated_ba_using_speedangle', 
                                 'estimated_woba_using_speedangle', 'delta_home_win_exp', 'delta_run_exp']:
-                        pitch_data[col] = float(val) if not pd.isna(val) else None
+                        pitch_data[output_col] = float(val) if not pd.isna(val) else None
                     else:
-                        pitch_data[col] = val if not pd.isna(val) else None
+                        pitch_data[output_col] = val if not pd.isna(val) else None
             
             pitches.append(pitch_data)
         

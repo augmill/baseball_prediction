@@ -42,8 +42,11 @@ fi
 # Get the directory of this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Use PYTHON env var if set, otherwise default to python3
+PYTHON_CMD="${PYTHON:-python3}"
+
 # Run the Python cleaning script
-python3 "$SCRIPT_DIR/CleanData.py" "$input_raw_csv" "$output_clean_csv"
+$PYTHON_CMD "$SCRIPT_DIR/CleanData.py" "$input_raw_csv" "$output_clean_csv"
 
 if [ $? -ne 0 ]; then
     echo "Error: CleanData.py failed."
