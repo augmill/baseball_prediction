@@ -93,3 +93,16 @@ def process_cols(df: pd.DataFrame, cols: list, func) -> pd.DataFrame:
     for col in cols:
         df[col] = func(df[col])
     return df
+
+nominals = ["game_type", "bb_type", "pitch_name", "type", "if_fielding_alignment", "of_fielding_alignment"]
+binaries = ["stand", "p_throws", "inning_topbot", "events"] #events has more than 2 but we want similar 
+players = ["on_3b", "on_2b", "on_1b"]
+
+df = pd.read_csv("../data/raw_data.csv")
+df["game_date"] = datetime(df["game_date"])
+df = process_cols(df, nominals, hash_features)
+df = process_cols(df, binaries, binarize)
+df = process_cols(df, players, is_player)
+df = expand(df, nominals)
+
+# df.to_csv("../data/updated.csv") if you want to export as a csv 
