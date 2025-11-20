@@ -7,9 +7,9 @@ def datetime(column: pd.Series) -> pd.Series:
     """
     Converts ```datetime``` data to usable type for machine learning
 
-    :param ```pd.Series``` column: The column to convert
+    :param ```pd.Series``` column: Column to convert
 
-    :returns ```pd.Series```: returns converted ```pd.Series``` 
+    :returns ```pd.Series```: Converted column
     """
     print(f"Converting {' '.join(column.name.split(sep='_'))} to ints...")
     try:
@@ -25,9 +25,9 @@ def hash_features(column: pd.Series) -> pd.DataFrame:
     """
     Converts nominal data to a hashed feeature vector using ```sklearn.feature_extraction.FeatureHasher```
 
-    :param ```pd.Series``` column: The column to convert
+    :param ```pd.Series``` column: Column to convert
 
-    :returns ```pd.Series```: returns converted ```pd.Series``` 
+    :returns ```pd.Series```: Converted column
     """
     print(f"Converting {' '.join(column.name.split(sep='_'))} to hashed features...")
     column = column.astype(str)
@@ -40,9 +40,9 @@ def binarize(column: pd.Series) -> pd.Series:
     """
     Binarizes nominal data that has only two options e.g. right and left
 
-    :param ```pd.Series``` column: The column to convert
+    :param ```pd.Series``` column: Column to convert
 
-    :returns ```pd.Series```: returns converted ```pd.Series``` 
+    :returns ```pd.Series```: Converted column
     """
     print(f"Binarizing {' '.join(column.name.split(sep='_'))}...")
     return column.astype("category").cat.codes
@@ -53,7 +53,7 @@ def is_player(column: pd.Series):
 
     :param ```pd.Series``` column: The column to convert
 
-    :returns ```pd.Series```: returns converted ```pd.Series``` 
+    :returns ```pd.Series```: Converted column
     """
     print(f"Converting {' '.join(column.name.split(sep='_'))} to bools...")
     for item in column: 
@@ -64,10 +64,10 @@ def expand(df: pd.DataFrame, cols: list) -> pd.DataFrame:
     """
     Expands the values in the columns that ```hash_features``` altered into their own columns
 
-    :param ```pd.DataFrame``` df: the dataframe whose columns are to be changed
-    :param list cols: the list of columns to expand
+    :param ```pd.DataFrame``` df: Dataframe to change
+    :param list cols: Columns to expand
 
-    :returns ```pd.DataFrame```: returns the dataframe with updated values
+    :returns ```pd.DataFrame```: Updated dataframe
     """
     for col in cols:
         vals = [str(item) for item in list(df[col])]
@@ -84,18 +84,19 @@ def process_cols(df: pd.DataFrame, cols: list, func) -> pd.DataFrame:
     """
     Applies the given function to each of the columns
 
-    :param ```pd.DataFrame``` df: the dataframe whose columns are to be changed
-    :param list cols: the list of columns to apply the function to 
-    :param function func: the function to apply to the list, the function must take only ```pd.Series```
+    :param ```pd.DataFrame``` df: Dataframe to change
+    :param list cols: Columns to altered 
+    :param function func: Function to alter ```cols``` (can only take ```pd.Series```)
 
-    :returns ```pd.DataFrame```: returns the dataframe with updated values
+    :returns ```pd.DataFrame```: Updated dataframe
     """
     for col in cols:
         df[col] = func(df[col])
     return df
 
+# usage example 
 nominals = ["game_type", "bb_type", "pitch_name", "type", "if_fielding_alignment", "of_fielding_alignment"]
-binaries = ["stand", "p_throws", "inning_topbot", "events"] #events has more than 2 but we want similar 
+binaries = ["stand", "p_throws", "inning_topbot", "events"] #events has more than 2 but we want similar functionality to get class labels
 players = ["on_3b", "on_2b", "on_1b"]
 
 df = pd.read_csv("../data/raw_data.csv")
