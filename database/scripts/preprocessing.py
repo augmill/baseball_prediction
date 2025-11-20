@@ -98,6 +98,18 @@ def process_cols(df: pd.DataFrame, cols: list, func) -> pd.DataFrame:
 nominals = ["game_type", "bb_type", "pitch_name", "type", "if_fielding_alignment", "of_fielding_alignment"]
 binaries = ["stand", "p_throws", "inning_topbot", "events"] #events has more than 2 but we want similar functionality to get class labels
 players = ["on_3b", "on_2b", "on_1b"]
+remove = ["Unnamed: 0", "spin_dir", "spin_rate_deprecated", "break_angle_deprecated", "break_length_deprecated", 
+          "tfs_deprecated", "tfs_zulu_deprecated", "umpire",
+          "pitch_type", "home_team", "away_team", "sv_id", "hit_distance_sc", 
+          "game_pk", "fielder_2", "fielder_3", "fielder_4", "fielder_5", "fielder_6", "fielder_7", "fielder_8", 
+          "fielder_9",  "estimated_ba_using_speedangle", "estimated_woba_using_speedangle", "woba_value", 
+          "babip_value", "launch_speed_angle", "delta_home_win_exp", "delta_run_exp", "bat_speed", "swing_length",
+          "estimated_slg_using_speedangle", "delta_pitcher_run_exp", "home_win_exp", "bat_win_exp", 
+          "pitcher_days_until_next_game", "batter_days_until_next_game", "api_break_z_with_gravity", "api_break_x_arm",
+          "api_break_x_batter_in", "arm_angle", "attack_angle", "attack_direction", "swing_path_tilt", 
+          "intercept_ball_minus_batter_pos_x_inches", "intercept_ball_minus_batter_pos_y_inches", "launch_speed",
+          "launch_angle", "hc_x", "hc_y", "woba_denom", "hit_location", "hyper_speed",
+          "description"]
 
 df = pd.read_csv("../data/raw_data.csv")
 df["game_date"] = datetime(df["game_date"])
@@ -105,5 +117,18 @@ df = process_cols(df, nominals, hash_features)
 df = process_cols(df, binaries, binarize)
 df = process_cols(df, players, is_player)
 df = expand(df, nominals)
+df.drop(columns=remove, inplace=True)
 
-# df.to_csv("../data/updated.csv") if you want to export as a csv 
+# NOTE: 
+"""
+running up to here will make a dataframe that should have most of the data that is relevent if reading in straight for statcast
+
+these next couple were useful for me to make sure everything had a value and I was only looking at at-bats but if there is a better way that is easier 
+for you to do these they may be unhelpful 
+""" 
+df.dropna(subset=['events'], inplace=True)
+df.dropna(axis=0, inplace=True)
+
+
+# NOTE: if you want to export as a csv but I imagine this is unhelpful for you 
+# df.to_csv("../data/updated.csv") 
