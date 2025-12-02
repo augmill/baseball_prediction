@@ -4,7 +4,7 @@
 
 Supplying reasoning for choices, what was the aim/ what can be gained from that experiment
 
-Make sure we have given
+Make sure we have given list of what we have each done (per requirements)
 
 ### Other todos
 
