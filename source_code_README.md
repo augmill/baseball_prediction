@@ -12,7 +12,7 @@
 
 Description: 
 
-This script references the atbat_sent_features table we have residing in BigQuery in Google Cloud. In this table, we have sentence embeddings which define the game state of each at-bat as well as the actual corresponding event outcomes of each at-bat. This script clusters at-bat outcomes into a 2D space based on the generated embeddings, helping us draw insights on the accuracy of the embeddings in describing the at-bat event outcome.
+This script references the atbat_sent_features table we have residing in BigQuery in Google Cloud. In this table, we have sentence embeddings which define the game state of each at-bat as well as the actual corresponding event outcomes of each at-bat. This script clusters at-bat outcomes into a 2D space based on the generated embeddings, helping us draw insights on the accuracy of the embeddings in describing the at-bat event outcomes.
 
 * embedding_distance_script.py
 
