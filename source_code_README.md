@@ -3,7 +3,7 @@
 __GitHub Repo:__ https://github.com/augmill/baseball_prediction.git
 
 ### Team Members:
-* August
+* August Milliken
 * Austin
 * Jackson Cockrum
 * Max Wool
@@ -52,3 +52,35 @@ This script references the atbat_sent_features table we have residing in BigQuer
 Description:
 
 After clustering has been performed using the previous script, this script checks the average distance between two clustered points with the same labeled event outcome vs the average distance between two points with random event outcomes. If clustering was successful, we would expect the average distance between points with same outcome to be significantly less than average distance between points with random event outcomes.
+
+
+* CustomDataset.py
+
+Description:
+
+Creates, or loads, a custom data used for modeling. It also ensures the data is ready to be used for the deep learning. 
+
+* data_pull.py
+
+Description:
+
+Based off of Jackson's work, it allows data to be pulled down and made into a useable local file for making the dataset for deep learning. 
+
+* make_embeddings.py
+
+Description: 
+
+Processes the sentences and makes the call to sentence-transformers to create a .dat file for the sentence embeddings to then be added to the deep learning dataset.
+
+* model.py
+
+Description:
+
+Defines each individual model's structure as well as the training loop, validation function, and the fit function for the models. 
+
+* run.py
+
+Description:
+
+A polished version of what to run in order to train and test the models. A Jupyter notebook was used for the actual training to avoid loading in the sizeable data each time. 
+
