@@ -1,5 +1,7 @@
 # Source Code Submission 
 
+__GitHub Repo:__ https://github.com/augmill/baseball_prediction.git
+
 ### Team Members:
 * August
 * Austin
