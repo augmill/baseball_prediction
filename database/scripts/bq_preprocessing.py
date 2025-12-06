@@ -20,6 +20,8 @@ class BigQueryPreprocessor:
         self.dataset_id = dataset_id
         self.source_table = "atbat_facts"
         self.target_table = "atbat_features"
+
+        self.key = {}
         
     def extract_data_from_bq(self, start_date: str, end_date: str, limit: Optional[int] = None) -> pd.DataFrame:
         """
@@ -166,10 +168,23 @@ class BigQueryPreprocessor:
         :returns list: List of hashed feature vectors
         """
         print(f"Converting {' '.join(column.name.split(sep='_'))} to hashed features...")
+        self.key[f"{column.name}_hash"] = []
+        self.key[f"{column.name}_label"] = []
         column = column.astype(str)
-        hasher = FeatureHasher(n_features=len(column.unique()), input_type="dict")
+        num_feats = len(column.unique())
+        hash_feats = num_feats if num_feats % 2 == 0 else num_feats +1 
+        hasher = FeatureHasher(n_features=hash_feats, input_type="dict")
         data = [{column.name: item} for item in column]
-        return [[int(val) for val in list(item)] for item in hasher.fit_transform(data).toarray()]
+        feats = [[int(val) for val in list(item)] for item in hasher.fit_transform(data).toarray()]
+
+        i = 0
+        while len(self.key[f"{column.name}_label"]) < num_feats:
+            if data[i][column.name] not in self.key[f"{column.name}_label"]:
+                self.key[f"{column.name}_label"].append(data[i][column.name])
+                self.key[f"{column.name}_hash"].append(feats[i])
+            i += 1
+
+        return feats
 
     def binarize(self, column: pd.Series) -> pd.Series:
         """
@@ -179,7 +194,10 @@ class BigQueryPreprocessor:
         :returns pd.Series: Converted column
         """
         print(f"Binarizing {' '.join(column.name.split(sep='_'))}...")
-        return column.astype("category").cat.codes
+        vars = column.astype("category").cat
+        col = vars.codes
+        self.key[column.name] = vars.categories.tolist()
+        return col
 
     def is_player(self, column: pd.Series) -> pd.Series:
         """
@@ -190,7 +208,7 @@ class BigQueryPreprocessor:
         """
         print(f"Converting {' '.join(column.name.split(sep='_'))} to bools...")
         return column.notna().astype(int)
-
+    
     def expand(self, df: pd.DataFrame, cols: list) -> pd.DataFrame: 
         """
         Expands the values in the columns that hash_features altered into their own columns
@@ -210,6 +228,41 @@ class BigQueryPreprocessor:
             inter.columns = [f'{col}{i}' for i in range(inter.shape[1])]
             df = pd.concat([df.iloc[:, :df.columns.get_loc(col)], inter, df.iloc[:, df.columns.get_loc(col)+1:]], axis=1)
         return df
+    
+    def events_process(self, column: pd.Series) -> pd.Series:
+        name = column.name
+        print(f"Converting {name} column")
+        self.key[f"{name}_reg"] = column.astype("category").cat.categories.tolist()
+        key = ["other", "single", "double", "triple", "homerun", "strikeout", "out", "multi_out", "walk", "awarded_first", "field_play"]
+        self.key[f"{name}_shift"] = key
+        column = column.astype("category").cat.codes
+        col = []
+        for label in column:
+            # label = int(label)
+            if label in [4, 6, 7, 12, 14]: # out
+                col.append(key.index("out"))
+            elif label == 16: # single
+                col.append(key.index("single"))
+            elif label == 1: # double 
+                col.append(key.index("double"))
+            elif label == 10: # homerun 
+                col.append(key.index("homerun"))
+            elif label in [2, 8, 13, 15, 18, 20]: # multi out
+                col.append(key.index("multi_out"))
+            elif label in [3, 5]: # field play 
+                col.append(key.index("field_play"))
+            elif label == 19: # triiple
+                col.append(key.index("triple"))
+            elif label == 17:
+                col.append(key.index("strikeout"))
+            elif label in [0, 9]: # awarded first
+                col.append(key.index("awarded_first"))
+            elif label in [11, 22]: # walk
+                col.append(key.index("walk"))
+            else: # other 
+                col.append(key.index("other"))
+        return col
+
 
     def process_cols(self, df: pd.DataFrame, cols: list, func) -> pd.DataFrame: 
         """
@@ -226,6 +279,33 @@ class BigQueryPreprocessor:
             else:
                 print(f"Warning: Column {col} not found in dataframe")
         return df
+    
+    def push_key(self, write_disposition: str = "WRITE_TRUNCATE") -> None:
+        """
+        Pushes generated key to a table in bigquery inspired by Jackson Cockrum's load_to_bq
+        
+        :param str write_disposition: How to handle existing data (WRITE_TRUNCATE, WRITE_APPEND, WRITE_EMPTY) 
+        """
+        self.key = {key : pd.Series(item) for key, item in self.key.items()}
+        try:
+            df = pd.DataFrame(self.key)
+            print(df)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+        print(f"Loading keys to BigQuery table feat_key_table...")
+
+        table_id = f"{self.project_id}.{self.dataset_id}.{"feat_key_table"}"
+
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=write_disposition,
+            autodetect=False,  # We'll use the schema from our DDL
+        )
+        
+        # Load the dataframe
+        job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result() 
 
     def process_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -237,20 +317,21 @@ class BigQueryPreprocessor:
         print("Starting data preprocessing...")
         
         # Define column categories for processing
-        nominals = ["game_type", "bb_type", "pitch_name", "type", "if_fielding_alignment", "of_fielding_alignment"]
-        binaries = ["stand", "p_throws", "inning_topbot", "events"]
+        nominals = ["game_type", "bb_type", "pitch_name", "if_fielding_alignment", "of_fielding_alignment"]
+        binaries = ["stand", "p_throws", "inning_topbot"]
         players = ["on_3b", "on_2b", "on_1b"]
         remove = ["Unnamed: 0", "spin_dir", "spin_rate_deprecated", "break_angle_deprecated", "break_length_deprecated", 
-                  "tfs_deprecated", "tfs_zulu_deprecated", "umpire",
-                  "pitch_type", "home_team", "away_team", "sv_id", "hit_distance_sc", 
-                  "game_pk", "fielder_2", "fielder_3", "fielder_4", "fielder_5", "fielder_6", "fielder_7", "fielder_8", 
-                  "fielder_9", "estimated_ba_using_speedangle", "estimated_woba_using_speedangle", "woba_value", 
-                  "babip_value", "launch_speed_angle", "delta_home_win_exp", "delta_run_exp", "bat_speed", "swing_length",
-                  "estimated_slg_using_speedangle", "delta_pitcher_run_exp", "home_win_exp", "bat_win_exp", 
-                  "pitcher_days_until_next_game", "batter_days_until_next_game", "api_break_z_with_gravity", "api_break_x_arm",
-                  "api_break_x_batter_in", "arm_angle", "attack_angle", "attack_direction", "swing_path_tilt", 
-                  "intercept_ball_minus_batter_pos_x_inches", "intercept_ball_minus_batter_pos_y_inches", "launch_speed",
-                  "launch_angle", "hc_x", "hc_y", "woba_denom", "hit_location", "hyper_speed", "description", "des"]
+          "tfs_deprecated", "tfs_zulu_deprecated", "umpire",
+          "pitch_type", "player_name", "sv_id", "hit_distance_sc", 
+          "game_pk", "fielder_2", "fielder_3", "fielder_4", "fielder_5", "fielder_6", "fielder_7", "fielder_8", 
+          "fielder_9",  "estimated_ba_using_speedangle", "estimated_woba_using_speedangle", "woba_value", 
+          "babip_value", "launch_speed_angle", "delta_home_win_exp", "delta_run_exp", "bat_speed", "swing_length",
+          "estimated_slg_using_speedangle", "delta_pitcher_run_exp", "home_win_exp", "bat_win_exp", 
+          "pitcher_days_until_next_game", "batter_days_until_next_game", "api_break_z_with_gravity", "api_break_x_arm",
+          "api_break_x_batter_in", "arm_angle", "attack_angle", "attack_direction", "swing_path_tilt", 
+          "intercept_ball_minus_batter_pos_x_inches", "intercept_ball_minus_batter_pos_y_inches", "launch_speed",
+          "launch_angle", "hc_x", "hc_y", "woba_denom", "hit_location", "hyper_speed", "type", "hit_distance", 
+          "post_home_score", "post_away_score", "post_bat_score", "description", "iso_value"] 
 
         # Apply transformations
         df["game_date_int"] = self.datetime(df["game_date"])
@@ -258,6 +339,8 @@ class BigQueryPreprocessor:
         df = self.process_cols(df, nominals, self.hash_features)
         df = self.process_cols(df, binaries, self.binarize)
         df = self.process_cols(df, players, self.is_player)
+        df = self.process_cols(df, ["events"], self.events_process)
+        self.push_key(write_disposition="WRITE_TRUNCATE")
         df = self.expand(df, nominals)
         
         # Remove unwanted columns (only if they exist)
@@ -367,7 +450,7 @@ def main():
         
         # Process the data
         processed_df = preprocessor.process_data(df)
-        
+
         # Load to BigQuery (always truncate/replace)
         preprocessor.load_to_bq(processed_df, write_disposition="WRITE_TRUNCATE")
         
