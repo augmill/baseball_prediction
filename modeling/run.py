@@ -84,3 +84,41 @@ game_class = fit(
     num_classes=num_classes,
     epochs=5, 
     mod_to_train=0)
+
+macro_precision = Precision(task="multiclass", average="macro", num_classes=num_classes)
+weighted_precision = Precision(task="multiclass", average="weighted", num_classes=num_classes)
+
+# results
+convert_result = validation(sub_convert,
+           test_loader,
+           macro_precision,
+           weighted_precision, 
+           1)
+print(convert_result[0])
+
+class_result = validation(sub_class,
+           test_loader,
+           macro_precision,
+           weighted_precision, 
+           2)
+print(class_result)
+macro_precision.reset()
+weighted_precision.reset() 
+
+model_result = validation(model,
+           test_loader,
+           macro_precision,
+           weighted_precision, 
+           0)
+print(model_result)
+macro_precision.reset()
+weighted_precision.reset() 
+
+game_result = validation(game_class,
+           test_loader,
+           macro_precision,
+           weighted_precision, 
+           0)
+print(game_result)
+macro_precision.reset()
+weighted_precision.reset() 
