@@ -23,12 +23,10 @@ def init_weights(model):
     """
     # NOTE: add instances for other types 
     if isinstance(model, nn.Linear):
-        torch.nn.init.kaiming_uniform_(model.weight, nonlinearity='relu')
+        torch.nn.init.kaiming_uniform_(model.weight, nonlinearity='leaky_relu') # , nonlinearity='relu' or 'leaky_relu'
         # torch.nn.init.xavier_uniform_(model.weight)
         model.bias.data.fill_(0.01) # starting bias
     # elif isinstance(model, nn.TransformerEncoder)
-
-
 
 class Convertion(nn.Module): # may want to add concat = True which will have the features split for each layer and concated
     def __init__(self, 
@@ -52,20 +50,22 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         """
         super().__init__()
         self.num_heads = num_heads
+        self.projection = nn.Linear(dim_in, dim_out)
+        self.gelu = nn.GELU()
+        self.relu = nn.ReLU()
+        self.leaky = nn.LeakyReLU(0.1)
         self.layer = nn.TransformerEncoderLayer(d_model=dim_out, nhead=num_heads, dim_feedforward=ff_dim, activation="relu", dropout=drop)
+        self.transformer = nn.TransformerEncoder(self.layer, num_layers)
         self.encode = nn.Sequential(
-            nn.Linear(dim_in, dim_out),
-            nn.GELU(), 
-            nn.TransformerEncoder(self.layer, num_layers),
-            nn.GELU()
+            self.projection,
+            self.leaky, 
+            self.transformer,
+            self.gelu
         )
         self.encode.apply(init_weights)
 
     def forward(self, input: torch.Tensor, num_layers: int = 1) -> torch.Tensor: 
         return self.encode(input)
-
-
-
 
 class Classification(nn.Module): 
     def __init__( 
@@ -88,22 +88,14 @@ class Classification(nn.Module):
         self.drop = drop
         self.layer1 = nn.Linear(self.dim_in, self.dim_hidden)
         self.relu = nn.ReLU()
+        self.leaky = nn.LeakyReLU(0.1)
         self.dropout = nn.Dropout(self.drop)
         self.hidden = nn.Linear(self.dim_hidden, self.dim_hidden)
         self.layer2 = nn.Linear(self.dim_hidden, self.dim_out)
         self.classify = nn.Sequential(
             self.layer1,
-            self.relu, 
+            self.leaky, 
             self.dropout,
-            # self.hidden,
-            # self.relu,
-            # self.dropout,
-            # self.hidden,
-            # self.relu,
-            # self.dropout,
-            # self.hidden,
-            # self.relu,
-            # self.dropout,
             self.layer2
         )
         self.classify.apply(init_weights)
@@ -126,13 +118,18 @@ class Multi(nn.Module):
         self.conversion_layer = convert
         self.clasifier_layer = classify
         self.relu = nn.ReLU()
+        self.leaky = nn.LeakyReLU(0.1)
         self.drop = nn.Dropout(drop)
 
     def forward(self, input: torch.Tensor):
         out = torch.cat([input,self.conversion_layer(input)], dim=1) if self.concat else self.conversion_layer(input)
         return self.clasifier_layer(out)
-    
-    
+
+
+class ModelTraining():
+    def __init__(self):
+        self.loss = []
+        self.metric = []
 
 def training(model:nn.Module, input, targets, opt, loss_fn, mod_to_train: int = 0, max_norm_value: float = 1.0):
     """
@@ -158,8 +155,6 @@ def training(model:nn.Module, input, targets, opt, loss_fn, mod_to_train: int = 
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm_value)
     opt.step()
     return loss.detach().item()#, model
-        
-
 
 def training_loop(model:nn.Module, opt:optim, loss_fn, data:DataLoader, mod_to_train: int = 0, max_norm_value: float = 1.0):
     """
@@ -169,7 +164,6 @@ def training_loop(model:nn.Module, opt:optim, loss_fn, data:DataLoader, mod_to_t
     :param ```DataLoader``` data: Training data
     :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
     :param float max_norm_value: Value for gradient clipping 
-
     """
     losses = []
     model.train()
@@ -200,7 +194,6 @@ def training_loop(model:nn.Module, opt:optim, loss_fn, data:DataLoader, mod_to_t
             losses.append(loss)
     else: raise KeyError(mod_to_train)
     print(f"Training loss: {sum(losses)/len(losses)}")
-
 
 def validation(
         model:nn.Module, 
@@ -278,7 +271,6 @@ def fit(
     :param int epochs: Number of epochs to complete
     :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
     """
-
     macro_precision = Precision(task="multiclass", average="macro", num_classes=num_classes)
     weighted_precision = Precision(task="multiclass", average="weighted", num_classes=num_classes)
     print(F"\n\nFitting {model._get_name()} model...")
@@ -295,4 +287,3 @@ def fit(
         macro_precision.reset()
         weighted_precision.reset() 
     return model
-        

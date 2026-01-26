@@ -24,7 +24,7 @@ def make_embeddings(
             path,
             dtype="float32",
             mode="w+",
-            shape=(1000000, 384)
+            shape=(len(sentences), 384)
         )
         
         for i in tqdm(range(0, len(sentences), chunk_size)):
@@ -44,7 +44,7 @@ def make_embeddings(
             path, 
             dtype="float32",
             mode="r",
-            shape=(1000000, 384)
+            shape=(len(sentences), 384)
         )
     embeddings = torch.from_numpy(embeddings) #
     return embeddings
