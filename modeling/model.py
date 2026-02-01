@@ -7,14 +7,14 @@ homerun; etc. prob between 2 and 8 classes.
 
 import torch 
 from torch import nn
-from torch import optim
-from torchmetrics import Precision
-from torch.utils.data import DataLoader
+# from torch import optim
+# from torchmetrics import Precision
+# from torch.utils.data import DataLoader
 # from torch.utils.data import Dataset
-from modeling.CustomDataset import * #baseball_prediction.modeling.
-from tqdm.autonotebook import tqdm
+# from modeling.CustomDataset import * #baseball_prediction.modeling.
+# from tqdm.autonotebook import tqdm
 # import tensorflow as tf
-import numpy as np
+# import numpy as np
 
 # https://stackoverflow.com/questions/49433936/how-do-i-initialize-weights-in-pytorch
 def init_weights(model):
@@ -49,18 +49,25 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         :param int num_layers: Number of transformer layers in the encoder 
         """
         super().__init__()
+        self.dim_in = dim_in
+        self.dim_out = dim_out
         self.num_heads = num_heads
+        self.drop = drop
+        self.dropout = nn.Dropout(drop)
         self.projection = nn.Linear(dim_in, dim_out)
         self.gelu = nn.GELU()
         self.relu = nn.ReLU()
         self.leaky = nn.LeakyReLU(0.1)
         self.layer = nn.TransformerEncoderLayer(d_model=dim_out, nhead=num_heads, dim_feedforward=ff_dim, activation="relu", dropout=drop)
         self.transformer = nn.TransformerEncoder(self.layer, num_layers)
+        # self.normalize = nn.functional.normalize()
         self.encode = nn.Sequential(
+            self.dropout,
             self.projection,
             self.leaky, 
             self.transformer,
             self.gelu
+            # self.normalize
         )
         self.encode.apply(init_weights)
 
@@ -93,6 +100,7 @@ class Classification(nn.Module):
         self.hidden = nn.Linear(self.dim_hidden, self.dim_hidden)
         self.layer2 = nn.Linear(self.dim_hidden, self.dim_out)
         self.classify = nn.Sequential(
+            # self.dropout,
             self.layer1,
             self.leaky, 
             self.dropout,
@@ -105,7 +113,14 @@ class Classification(nn.Module):
         return self.classify(input)
 
 class Multi(nn.Module):
-    def __init__(self, convert: Convertion, classify: Classification, drop: float, concat: bool = True): # dim_in: int, dim_out: int, num_heads: int, ff_dim: int, drop: float, num_classes: int,
+    def __init__(
+        self, 
+        convert: Convertion, 
+        classify: Classification, 
+        drop: float, 
+        freeze: bool = False,
+        concat: bool = True
+    ): # dim_in: int, dim_out: int, num_heads: int, ff_dim: int, drop: float, num_classes: int,
         """
         Initialize ```torch.nn.Module``` that stacks other ```torch.nn.Modules```
 
@@ -114,176 +129,18 @@ class Multi(nn.Module):
         :param bool concat: Tells the module whether or not it should attach the original input to the output of the first layer before being passed to the second 
         """
         super().__init__()
+        self.dim_in = convert.dim_in
         self.concat = concat
         self.conversion_layer = convert
         self.clasifier_layer = classify
         self.relu = nn.ReLU()
         self.leaky = nn.LeakyReLU(0.1)
-        self.drop = nn.Dropout(drop)
-
+        self.dropout = nn.Dropout(drop)
+        if freeze == True:
+            for param in self.conversion_layer.parameters():
+                param.requires_grad = False
     def forward(self, input: torch.Tensor):
         out = torch.cat([input,self.conversion_layer(input)], dim=1) if self.concat else self.conversion_layer(input)
+        # out = self.relu(out)
+        # out = self.dropout(out)
         return self.clasifier_layer(out)
-
-
-class ModelTraining():
-    def __init__(self):
-        self.loss = []
-        self.metric = []
-
-def training(model:nn.Module, input, targets, opt, loss_fn, mod_to_train: int = 0, max_norm_value: float = 1.0):
-    """
-    Determines model logits and loss
-
-    :param data: Input data
-    :param targets: Target labels
-    :param optim opt: Training optimizer
-    :param loss_fn: Loss function
-    :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
-    :param float max_norm_value: Value for gradient clipping 
-    """
-    logits = model(input)
-    if mod_to_train in [0, 1, 2, 3]:
-        loss = loss_fn(logits, targets) #.long()
-    elif mod_to_train == 4:
-        loss = loss_fn(logits, targets, torch.ones(logits.shape[0]))
-    else: 
-        raise KeyError(mod_to_train)
-    opt.zero_grad()
-    loss.backward()
-    # gradiant clipping https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_norm_.html
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm_value)
-    opt.step()
-    return loss.detach().item()#, model
-
-def training_loop(model:nn.Module, opt:optim, loss_fn, data:DataLoader, mod_to_train: int = 0, max_norm_value: float = 1.0):
-    """
-    :param ```nn.Module``` model: Model to train
-    :param optim opt: Training optimizer
-    :param loss_fn: Training loss function
-    :param ```DataLoader``` data: Training data
-    :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
-    :param float max_norm_value: Value for gradient clipping 
-    """
-    losses = []
-    model.train()
-
-    if mod_to_train == 0: # mixed
-        for batch in tqdm(data, desc = "Training"):
-            inputs = batch[0]
-            targets = batch[1]
-            loss = training(model, inputs, targets, opt, loss_fn, mod_to_train, max_norm_value)
-            losses.append(loss)
-    elif mod_to_train in [1, 4]: # encode
-        for batch in tqdm(data, desc = "Training"): 
-            inputs = batch[0]
-            targets = batch[2]
-            loss = training(model, inputs, targets, opt, loss_fn, mod_to_train, max_norm_value)
-            losses.append(loss)
-    elif mod_to_train == 2: # just class
-        for batch in tqdm(data, desc = "Training"):
-            inputs = batch[2]
-            targets = batch[1]
-            loss = training(model, inputs, targets, opt, loss_fn, mod_to_train, max_norm_value)
-            losses.append(loss)
-    elif mod_to_train == 3: # class with concat input
-        for batch in tqdm(data, desc = "Training"):
-            inputs = torch.concat([batch[0],batch[2]], dim=1)
-            targets = batch[1]
-            loss = training(model, inputs, targets, opt, loss_fn, mod_to_train, max_norm_value)
-            losses.append(loss)
-    else: raise KeyError(mod_to_train)
-    print(f"Training loss: {sum(losses)/len(losses)}")
-
-def validation(
-        model:nn.Module, 
-        data:DataLoader, 
-        macro: Precision, 
-        weighted: Precision, 
-        mod: int = 0
-    ): 
-    """
-    :param ```nn.Module``` model: Model to validate
-    :param ```DataLoader``` data: Validation data
-    :param ```torchmetrics.Precision``` macro: Macro precision 
-    :param ```torchmetrics.Precision``` macro: Weighted precision
-    :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
-    """
-    losses = []
-    macro.reset()
-    weighted.reset()
-    model.eval()
-    with torch.no_grad():
-        if mod == 0: # mixed
-            for batch in tqdm(data, desc = "Validating"):
-                logits = model(batch[0])
-                labels = batch[1]
-                macro.update(torch.argmax(logits, dim=1), labels)
-                weighted.update(torch.argmax(logits, dim=1), labels)
-            losses.append(macro.compute())
-            losses.append(weighted.compute())
-        elif mod in [1, 4]: # encode
-            sim = []
-            loss = nn.MSELoss()
-            for batch in tqdm(data, desc = "Validating"):
-                logits = model(batch[0])
-                labels = batch[2]
-                losses.append(loss(logits, labels))
-                sim.append(nn.functional.cosine_similarity(logits, labels))
-            average = torch.mean(torch.cat(sim, dim=0))
-            print(f"Cosine similarity: {average}")
-            losses = [sum(losses)/len(losses)]
-        elif mod == 2: # just class
-            for batch in tqdm(data, desc = "Validating"):
-                logits = model(batch[2])
-                labels = batch[1]
-                macro.update(torch.argmax(logits, dim=1), labels)
-                weighted.update(torch.argmax(logits, dim=1), labels)
-            losses.append(macro.compute())
-            losses.append(weighted.compute())
-        elif mod == 3: # class with concat input
-            for batch in tqdm(data, desc = "Validating"):
-                logits = model(torch.concat([batch[0],batch[2]], dim=1))
-                labels = batch[1]
-                macro.update(torch.argmax(logits, dim=1), labels)
-                weighted.update(torch.argmax(logits, dim=1), labels)
-            losses.append(macro.compute())
-            losses.append(weighted.compute())
-    return losses
-
-def fit(
-        model:nn.Module, 
-        opt:optim, 
-        loss_fn, 
-        train_data:DataLoader, 
-        val_data:DataLoader, 
-        num_classes:int, 
-        epochs:int, 
-        mod_to_train: int = 0
-        ): 
-    """
-    :param ```nn.Module``` model: Model to train and validate 
-    :param optim opt: Training optimizer
-    :param loss_fn: Training loss function (note used for validation)
-    :param ```DataLoader``` data: Training data
-    :param ```DataLoader``` data: Validation data
-    :param int num_classes: Number of possible class labels
-    :param int epochs: Number of epochs to complete
-    :param int mod_to_train: 0 mixed, 1 encode, 2 class alone, 3 class for concat input, 4 encode with cosine
-    """
-    macro_precision = Precision(task="multiclass", average="macro", num_classes=num_classes)
-    weighted_precision = Precision(task="multiclass", average="weighted", num_classes=num_classes)
-    print(F"\n\nFitting {model._get_name()} model...")
-    for epoch in range(epochs):
-        print("-"*25, f"Epoch: {epoch+1}", "-"*25)
-        training_loop(model, opt, loss_fn, train_data, mod_to_train)
-        print()
-        losses = validation(model, val_data, macro_precision, weighted_precision, mod_to_train)
-        if len(losses) == 1:
-            print(F"Validation loss: {losses[0]}")
-        elif len(losses) == 2:
-            print(F"Validation Macro precision: {losses[0]}\nValidation Weighted precision: {losses[1]}")
-        else: raise ValueError()
-        macro_precision.reset()
-        weighted_precision.reset() 
-    return model

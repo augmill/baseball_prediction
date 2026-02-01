@@ -32,12 +32,14 @@ class CustomDataset(Dataset):
         :param str kind: Kind of dataset sentences are from ie train, dev, test
         :param ```SentenceTransformer``` encoder: Encoder to encode the sentence
         """ 
+        # self.df = df
         self.labels = [torch.tensor(label) for label in df[label_col]] 
         self.sentences = make_embeddings(kind, df['des'], encoder) 
         print(len(self.labels))
         print(self.sentences.shape)
         df.drop(columns=['des', label_col, 'batter', 'pitcher', 'home_team', 'away_team'], inplace=True)
         self.values = torch.tensor(df.to_numpy(dtype=np.float32)) 
+        # normalize 
         self.weights = self.create_class_weights()
 
     def __len__(self):
