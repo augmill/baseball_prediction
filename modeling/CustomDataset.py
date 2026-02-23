@@ -1,5 +1,5 @@
 import torch
-import random
+# import random
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
@@ -7,6 +7,8 @@ from modeling.make_embeddings import *
 from modeling.data_pull import *
 from collections import Counter 
 import re
+
+pd.options.mode.chained_assignment = None
 
 # NOTE: used just when uploading sentences 
 # from database.scripts.bq_preprocessing import BigQueryPreprocessor 
@@ -88,28 +90,28 @@ def weight_classes(data: CustomDataset):
     weights.insert(0, 0.5)
     return torch.tensor(weights)
 
-def make_datasets(
-        date: str,
+def make_dataset(
+        start_date: str,
         label_col: str, 
-        seed: int, 
-        splits: list = [0.8, 0.1, 0.1], 
-        sample: bool = False, 
-        upload: bool = False
-        ) -> tuple:
+        # seed: int, :param int seed: Seed for randomization 
+        # splits: list = [0.8, 0.1, 0.1], :param list splits: Splits for [Train, Dev, Test]
+        # sample: bool = False, 
+        # upload: bool = False
+        ) -> Dataset: #-> tuple: Creates train, dev, and test datasets :returns ```tuple``` of datasets:
     """
-    Creates train, dev, and test datasets
+    Creates or loads in the dataset
     
-    :param str date: The date to start at from the larger dataset (DD-MM-YYYY)
+    :param str start_date: The date to start at from the larger dataset (DD-MM-YYYY)
     :param str label_col: Class label to predict
-    :param int seed: Seed for randomization 
-    :param list splits: Splits for [Train, Dev, Test] 
-
-    :returns ```tuple``` of datasets:
+    
+     
+    :return DataSet: 
+    
     """
-    file_date = date.replace("-", "_")
+    file_date = start_date.replace("-", "_")
     path = f'data/{file_date}_dataset.pt'
     if os.path.exists(path):
-        print(f"Loading {date} dataset...")
+        print(f"Loading {start_date} dataset...")
         dataset = torch.load(path, weights_only=False)
         # NOTE: below used when uploading sentences 
         # if upload:
@@ -126,35 +128,35 @@ def make_datasets(
     else: 
         # NOTE: if we want to use get data, we have to use big query which will cause us problems as it will 
         # downgrade mlflow 
-        print(f"Creating {date} dataset...")
+        print(f"Creating {start_date} dataset...")
         # NOTE: the code below was used to create the sampled dataset 
         if os.path.exists(f"data/{file_date}_data.csv"): 
             df = pd.read_csv(f"data/{file_date}_data.csv")
         else: 
-            df = get_data(date) 
+            df = get_data(start_date) 
             df.to_csv(f"data/{file_date}_data.csv")
         df = df[df['des'].str.contains("\.")]
         # print(len(df))
         # print(df['des'][:10])
-        if sample: 
-            class_counter = Counter()
-            class_counter.update(int(event) for event in df["events"])
-            print(class_counter)
-            for i in range(len(df['events'].unique())):
-                print(class_counter[i])
-                # NOTE: 
-                class_counter[i] = 1.0/np.sqrt(class_counter[i])
-            print(class_counter)
-            df['weight'] = df['events'].map(class_counter)
-            # NOTE: 
-            # NOTE: top 2 at about 200k, for next smallest make sample as large as smaller 
-            # class, 
-            df = df.sample(1000000, weights='weight', random_state=seed)
-            df.drop(columns=["weight"], inplace=True)
+        # if sample: 
+        #     class_counter = Counter()
+        #     class_counter.update(int(event) for event in df["events"])
+        #     print(class_counter)
+        #     for i in range(len(df['events'].unique())):
+        #         print(class_counter[i])
+        #         # NOTE: 
+        #         class_counter[i] = 1.0/np.sqrt(class_counter[i])
+        #     print(class_counter)
+        #     df['weight'] = df['events'].map(class_counter)
+        #     # NOTE: 
+        #     # NOTE: top 2 at about 200k, for next smallest make sample as large as smaller 
+        #     # class, 
+        #     df = df.sample(1000000, weights='weight', random_state=seed)
+        #     df.drop(columns=["weight"], inplace=True)
         # this might be to find the class weights post sampling 
-        counter = Counter()
-        counter.update(int(event) for event in df["events"])
-        print(f"non-sample counter: {counter}")
+        # counter = Counter()
+        # counter.update(int(event) for event in df["events"])
+        # print(f"non-sample counter: {counter}")
         # removes any instances of stats or numbers being in the natural language sentences
         df['des'] = df['des'].apply(lambda x: re.sub(r"\([0-9]+\)", "", x))
         df["game_date"] = df["game_date"].apply(lambda x: str(x).replace("-", ""))
@@ -166,8 +168,8 @@ def make_datasets(
 
         dataset = CustomDataset(df, label_col, file_date, encoder)
         torch.save(dataset, path)
-    if len(splits) != 3:
-        splits = [0.8, 0.1, 0.1]
+    # if len(splits) != 3:
+    #     splits = [0.8, 0.1, 0.1]
 
     # class_weights = weight_classes(dataset)
     
