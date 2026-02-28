@@ -62,10 +62,10 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         self.trans_drop = trans_drop
 
         self.embed = nn.Linear(1, dim_inner)
-        self.pos_embed = nn.Parameter(torch.randn(1, 78, dim_inner))
+        self.pos_embed = nn.Parameter(torch.randn(1, dim_in, dim_inner))
 
         # self.projection = nn.Linear(dim_inner, dim_out)
-        self.projection = nn.Linear(dim_inner, 34)
+        self.projection = nn.Linear(dim_in, dim_out)
         # self.projection = nn.Linear(ff_dim, dim_out)
         self.gelu = nn.GELU()
         self.relu = nn.ReLU()
@@ -88,23 +88,24 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         self.hidden = nn.Linear(ff_dim, ff_dim)
         self.layer2 = nn.Linear(ff_dim, dim_out)
         self.bn = nn.BatchNorm1d(ff_dim)
+        self.bn2 = nn.BatchNorm1d(dim_in)
         # self.final_bn = nn.BatchNorm1d(dim_out)
 
 
-        self.encode = nn.Sequential(
-            # self.dropout,
-            self.projection, #NOTE: need to chnage so i do not have two of the same layer and i/o dims are good
-            # self.gelu,
-            # self.relu,
-            # self.leaky, 
-            self.transformer,
-            # self.gelu,
-            self.dropout,
-            self.projection,
-            # self.gelu
-            # self.normalize
-        )
-        self.encode.apply(init_weights)
+        # self.encode = nn.Sequential(
+        #     # self.dropout,
+        #     # self.projection, #NOTE: need to chnage so i do not have two of the same layer and i/o dims are good
+        #     # self.gelu,
+        #     # self.relu,
+        #     # self.leaky, 
+        #     self.transformer,
+        #     # self.gelu,
+        #     self.dropout,
+        #     self.projection,
+        #     # self.gelu
+        #     # self.normalize
+        # )
+        # self.encode.apply(init_weights)
 
         # for module in [self.layer1, self.hidden, self.layer2]:
         #     module.apply(init_weights)
@@ -124,7 +125,17 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         # x = self.normalize(x)
         # x = self.encode(input)
 
-        return self.normalize(self.encode(input))
+
+        x = self.transformer(input)
+        x = x + input 
+        x = self.bn2(x)
+        x = self.projection(x)
+
+        return x
+
+        # return self.normalize(self.encode(input))
+
+        #decent results came from this?
 
         x = self.layer1(input)
         x = self.bn(x)
@@ -175,15 +186,20 @@ class Classification(nn.Module):
         #     self.dropout,
         #     self.layer2
         # )
+        self.hidden_layers = nn.ModuleList([
+            nn.Linear(self.hidden, self.hidden) for _ in range(self.num_hidden)
+        ])
+        for layer in self.hidden_layers:
+            layer.apply(init_weights)
         for module in [self.layer1, self.hidden, self.layer2]:
             module.apply(init_weights)
 
     def forward(self, input: torch.Tensor):
         x = self.layer1(input)
-        for _ in range(self.num_hidden): # change to using module list
+        for layer in self.hidden_layers: # change to using module list
             x = self.leaky(x)
             x = self.dropout(x)
-            x = self.hidden(x)
+            x = layer(x)
         x = self.leaky(x)
         x = self.dropout(x)
         x = self.layer2(x)

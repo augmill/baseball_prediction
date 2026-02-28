@@ -201,11 +201,12 @@ class ModelTraining():
                     logits = self.model(batch[0])
                     embeds = nn.functional.normalize(batch[2])
                     means.append(MSE(logits, embeds))
-                    sim.append(nn.functional.cosine_similarity(logits, embeds)) #(x, y)
+                    sim.append(nn.functional.cosine_similarity(logits, embeds).mean()) #(x, y)
                 # average = torch.mean(torch.cat(sim, dim=0))
                 # print(f"Cosine similarity: {average}")
                 # losses = [sum(losses)/len(losses)]
                 # losses.append(torch.mean(torch.cat(sim, dim=0)))
+                # sim = [sum(s)/len(s) for s in sim]
                 losses.append(sum(sim)/len(sim))
                 losses.append(sum(means)/len(means))
             elif self.mod_to_train == 2: # just class
