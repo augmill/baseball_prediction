@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from modeling.make_embeddings import *
-from modeling.data_pull import *
+# from modeling.data_pull import *
 from collections import Counter 
 import re
 
@@ -133,7 +133,7 @@ def make_dataset(
         if os.path.exists(f"data/{file_date}_data.csv"): 
             df = pd.read_csv(f"data/{file_date}_data.csv")
         else: 
-            df = get_data(start_date) 
+            df = 'd'#get_data(start_date) 
             df.to_csv(f"data/{file_date}_data.csv")
         df = df[df['des'].str.contains("\.")]
         # print(len(df))

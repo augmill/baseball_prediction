@@ -32,13 +32,22 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
     def __init__(
         self, 
         dim_in: int,
-        dim_out: int, 
-        num_heads: int, 
-        ff_dim: int,
+        dim_out: int,
+        # num_heads: int,
+        # ff_dim: int,
+        # trans_drop: float,
+        in_num_heads: int, 
+        in_ff_dim: int,
         drop: float,
-        trans_drop: float,
-        dim_inner: int = 32, # Small data: d_model ≈ 32–64 Medium: 64–128 Large / complex interactions: 128–256
-        num_layers: int = 1 
+        in_trans_drop: float,
+        out_num_heads: int, 
+        out_ff_dim: int,
+        out_trans_drop: float,
+        in_dim_inner: int = 32, # Small data: d_model ≈ 32–64 Medium: 64–128 Large / complex interactions: 128–256
+        in_num_layers: int = 1,
+        out_dim_inner: int = 32, # Small data: d_model ≈ 32–64 Medium: 64–128 Large / complex interactions: 128–256
+        out_num_layers: int = 1,
+        dim_hidden: int = 462,
     ):
         """
         Initialize ```torch.nn.Module``` that converts a game state embedding to sentence embedding 
@@ -55,81 +64,65 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
         super().__init__()
         self.dim_in = dim_in
         self.dim_out = dim_out
-        self.dim_inner = dim_inner
-        self.num_heads = num_heads
+        self.in_dim_inner = in_dim_inner
+        self.in_num_heads = in_num_heads
+        self.dim_hidden = dim_hidden
         self.drop = drop
         self.dropout = nn.Dropout(drop) # batch norm over dropout?
-        self.trans_drop = trans_drop
+        self.trans_drop = in_trans_drop
+        self.out_dim_inner = out_dim_inner
+        self.out_num_heads = out_num_heads
+        self.trans_drop = out_trans_drop
 
-        self.embed = nn.Linear(1, dim_inner)
-        self.pos_embed = nn.Parameter(torch.randn(1, dim_in, dim_inner))
+        self.embed = nn.Linear(1, in_dim_inner)
+        self.embed.apply(init_weights)
+        self.pooling = lambda x : x.mean(dim=-1) #1dpool? # putting -1 gettings batch, dim_in, 1 gets batch, inner_dim
+        self.hidden_proj = (in_dim_inner * dim_out)
+        self.projection = nn.Linear(self.hidden_proj, dim_out)
+        self.projection.apply(init_weights)
+        self.in_projection = nn.Linear(dim_in, self.hidden_proj)
+        self.in_projection.apply(init_weights)
 
-        # self.projection = nn.Linear(dim_inner, dim_out)
-        self.projection = nn.Linear(dim_in, dim_out)
-        # self.projection = nn.Linear(ff_dim, dim_out)
         self.gelu = nn.GELU()
         self.relu = nn.ReLU()
         self.leaky = nn.LeakyReLU(0.1)
-        self.layer = nn.TransformerEncoderLayer(
-            d_model=dim_in, 
-            nhead=num_heads, 
-            dim_feedforward=ff_dim, #ff_dim, 
-            activation="relu", 
-            dropout=trans_drop,
+        self.in_layer = nn.TransformerEncoderLayer(
+            d_model=in_dim_inner, 
+            nhead=in_num_heads, 
+            dim_feedforward=in_ff_dim, #ff_dim, 
+            activation="gelu", 
+            dropout=in_trans_drop,
             batch_first=True    
         )
-        self.transformer = nn.TransformerEncoder(self.layer, num_layers)
-        self.pooling = lambda x : x.mean(dim=1)
+        self.in_transformer = nn.TransformerEncoder(self.in_layer, in_num_layers)
         self.normalize = lambda x : nn.functional.normalize(x)
 
+        self.out_layer = nn.TransformerEncoderLayer(
+            d_model=dim_out, #out_dim_inner
+            nhead=out_num_heads,
+            dim_feedforward=out_ff_dim,
+            activation='relu',
+            dropout=out_trans_drop,
+            batch_first=True
+        )
 
-        self.num_hidden = num_layers
-        self.layer1 = nn.Linear(dim_in, ff_dim)
-        self.hidden = nn.Linear(ff_dim, ff_dim)
-        self.layer2 = nn.Linear(ff_dim, dim_out)
-        self.bn = nn.BatchNorm1d(ff_dim)
-        self.bn2 = nn.BatchNorm1d(dim_in)
-        # self.final_bn = nn.BatchNorm1d(dim_out)
-
-
-        # self.encode = nn.Sequential(
-        #     # self.dropout,
-        #     # self.projection, #NOTE: need to chnage so i do not have two of the same layer and i/o dims are good
-        #     # self.gelu,
-        #     # self.relu,
-        #     # self.leaky, 
-        #     self.transformer,
-        #     # self.gelu,
-        #     self.dropout,
-        #     self.projection,
-        #     # self.gelu
-        #     # self.normalize
-        # )
-        # self.encode.apply(init_weights)
-
-        # for module in [self.layer1, self.hidden, self.layer2]:
-        #     module.apply(init_weights)
+        self.out_transformer = nn.TransformerEncoder(self.out_layer, out_num_layers)
+        self.ln = nn.LayerNorm(in_dim_inner)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor: 
-        # x = input.unsqueeze(-1)
-        # x = self.embed(x)
-
-        # x = self.embed(input.unsqueeze(-1))
-        # x += self.pos_embed
-        # return self.normalize(self.projection(self.pooling(self.transformer(x))))
-    
-        # x = self.transformer(x)
-        # x = self.pooling(x)
-        # x = self.dropout(x)
-        # x = self.projection(x)
-        # x = self.normalize(x)
-        # x = self.encode(input)
-
-
-        x = self.transformer(input)
-        x = x + input 
-        x = self.bn2(x)
+        x = input.unsqueeze(-1)
+        x = self.embed(x)
+        x_skip = self.leaky(x)
+        x = self.in_transformer(x_skip)
+        x = x + x_skip 
+        x = self.ln(x)
+        x = self.pooling(x)
+        x = self.leaky(x)
+        x = x + input
+        x = self.in_projection(x)
+        x = self.leaky(x)
         x = self.projection(x)
+        self.normalize(x)
 
         return x
 
@@ -147,6 +140,7 @@ class Convertion(nn.Module): # may want to add concat = True which will have the
             x = self.leaky(x)
             # x = self.dropout(x)
         # x = self.dropout(x)
+        x = x + input
         x = self.layer2(x)
         self.normalize(x)
         return x
@@ -174,11 +168,17 @@ class Classification(nn.Module):
         self.drop = drop
         self.num_hidden = num_hidden
         self.layer1 = nn.Linear(self.dim_in, self.dim_hidden)
+        self.layer1.apply(init_weights)
         self.relu = nn.ReLU()
         self.leaky = nn.LeakyReLU(0.1)
         self.dropout = nn.Dropout(self.drop)
         self.hidden = nn.Linear(self.dim_hidden, self.dim_hidden)
+        self.hidden.apply(init_weights)
         self.layer2 = nn.Linear(self.dim_hidden, self.dim_out)
+        self.layer2.apply(init_weights)
+
+        self.ln = nn.LayerNorm(self.dim_hidden)
+
         # self.classify = nn.Sequential(
         #     # self.dropout,
         #     self.layer1,
@@ -191,17 +191,19 @@ class Classification(nn.Module):
         ])
         for layer in self.hidden_layers:
             layer.apply(init_weights)
-        for module in [self.layer1, self.hidden, self.layer2]:
-            module.apply(init_weights)
+        # for module in [self.layer1, self.hidden, self.layer2]:
+        #     module.apply(init_weights)
 
     def forward(self, input: torch.Tensor):
         x = self.layer1(input)
         for layer in self.hidden_layers: # change to using module list
+            x = self.ln(x)
             x = self.leaky(x)
-            x = self.dropout(x)
+            # x = self.dropout(x)
             x = layer(x)
+        x = self.ln(x)
         x = self.leaky(x)
-        x = self.dropout(x)
+        # x = self.dropout(x)
         x = self.layer2(x)
         # print(input.dtype)
         # return self.classify(input)
@@ -210,6 +212,7 @@ class Classification(nn.Module):
 class Multi(nn.Module):
     def __init__(
         self, 
+        # dim_in: int,
         convert: Convertion, 
         classify: Classification, 
         drop: float, 
@@ -224,7 +227,7 @@ class Multi(nn.Module):
         :param bool concat: Tells the module whether or not it should attach the original input to the output of the first layer before being passed to the second 
         """
         super().__init__()
-        self.dim_in = convert.dim_in
+        # self.dim_in = dim_in#convert.dim_in
         self.concat = concat
         self.conversion_layer = convert
         self.clasifier_layer = classify

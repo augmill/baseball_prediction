@@ -8,7 +8,7 @@ def prep(seed: int, device: str = 'cpu') -> torch.Generator:
     """Seeds all relevant parts of the process and sets default torch dtype and returns a torch generator"""
     torch.set_default_device(device)
     torch.manual_seed(seed)
-    torch.set_num_threads(4)
+    # torch.set_num_threads(4)
     # random.seed(seed) #NOTE: may be unnecessary 
     g = torch.Generator().manual_seed(seed) #NOTE: may be unnecessary
     torch.set_default_dtype(torch.float32) 
@@ -112,10 +112,14 @@ def make_loaders(
     dev_data = torch.utils.data.Subset(local_data, dev_indicies)
     test_data = torch.utils.data.Subset(local_data, test_indicies)
 
+    num_workers = 0
+    per_workers = False
+    pin_mem = True if torch.cuda.is_available() else False
+
     if not sampled:
-        train_loader = DataLoader(train_data, batch_size=batch_size) 
-        dev_loader = DataLoader(dev_data, batch_size=batch_size) 
-        test_loader = DataLoader(test_data, batch_size=batch_size) 
+        train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_mem, persistent_workers=per_workers) 
+        dev_loader = DataLoader(dev_data, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_mem, persistent_workers=per_workers) 
+        test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_mem, persistent_workers=per_workers) 
 
     else:
         sample_weights = make_sampler_weights(local_data)
@@ -125,11 +129,11 @@ def make_loaders(
         # dev_sampler = WeightedRandomSampler(dev_weights, num_samples=100000, replacement=True)
         # test_weights = sample_weights[test_indicies]
         # test_sampler = WeightedRandomSampler(test_weights, num_samples=100000)
-        train_loader = DataLoader(train_data, batch_size=batch_size, sampler=train_sampler) 
+        train_loader = DataLoader(train_data, batch_size=batch_size, sampler=train_sampler, pin_memory=pin_mem) 
         # dev_loader = DataLoader(dev_data, batch_size=batch_size, sampler=dev_sampler) 
         # test_loader = DataLoader(test_data, batch_size=batch_size, sampler=test_sampler)
-        dev_loader = DataLoader(dev_data, batch_size=batch_size) 
-        test_loader = DataLoader(test_data, batch_size=batch_size)
+        dev_loader = DataLoader(dev_data, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_mem) 
+        test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_mem)
 
     return train_loader, dev_loader, test_loader
 

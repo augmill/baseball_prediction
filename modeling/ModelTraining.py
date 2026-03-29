@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from torchinfo import summary
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
+import optuna 
+from optuna.exceptions import TrialPruned
 
 class ModelTraining():
     def __init__(
@@ -108,7 +110,8 @@ class ModelTraining():
         loss_fn, 
         data:DataLoader, 
         # mod_to_train: int = 0, 
-        max_norm_value: float = 1.0
+        max_norm_value: float = 1.0,
+        device: str = 'cpu'
     ):
         """
         :param ```nn.Module``` model: Model to train
@@ -126,7 +129,7 @@ class ModelTraining():
             for batch in data:
                 # inputs = batch[0]
                 # targets = batch[1]
-                loss = self.training(batch[0], batch[1], opt, loss_fn, max_norm_value) # model, , mod_to_train 
+                loss = self.training(batch[0].to(device), batch[1].to(device), opt, loss_fn, max_norm_value) # model, , mod_to_train 
                 losses.append(loss)
         elif self.mod_to_train in [1, 4]: # encode
             # for batch in tqdm(data, desc = "Training"): 
@@ -134,21 +137,21 @@ class ModelTraining():
             for batch in data:
                 # inputs = batch[0]
                 # targets = batch[2]
-                loss = self.encode_training(batch[0], batch[2], opt, max_norm_value, loss_fn) # model, , mod_to_train
+                loss = self.encode_training(batch[0].to(device), batch[2].to(device), opt, max_norm_value, loss_fn) # model, , mod_to_train
                 losses.append(loss)
         elif self.mod_to_train == 2: # just class
             # for batch in tqdm(data, desc = "Training"):
             for batch in data:
                 # inputs = batch[2]
                 # targets = batch[1]
-                loss = self.training(batch[2], batch[1], opt, loss_fn, max_norm_value) # model, , mod_to_train
+                loss = self.training(batch[2].to(device), batch[1].to(device), opt, loss_fn, max_norm_value) # model, , mod_to_train
                 losses.append(loss)
         elif self.mod_to_train == 3: # class with concat input
             # for batch in tqdm(data, desc = "Training"):
             for batch in data: 
                 # inputs = torch.concat([batch[0],batch[2]], dim=1)
                 # targets = batch[1]
-                loss = self.training(torch.concat([batch[0],batch[2]], dim=1), batch[1], opt, loss_fn, max_norm_value) # model, , mod_to_train
+                loss = self.training(torch.concat([batch[0].to(device),batch[2].to(device)], dim=1), batch[1].to(device), opt, loss_fn, max_norm_value) # model, , mod_to_train
                 losses.append(loss)
         else: raise KeyError(self.mod_to_train)
         # print(f"Training loss: {sum(losses)/len(losses)}")
@@ -162,8 +165,9 @@ class ModelTraining():
         # macro: Precision, 
         # weighted: Precision, 
         # cosine_sim: nn.functional = lambda x, y : nn.functional.cosine_similarity(x, y),
-        MSE = nn.MSELoss(), 
+        # MSE = nn.MSELoss(), 
         # mod: int = 0
+        device: str = 'cpu'
     ): 
         """
         :param ```nn.Module``` model: Model to validate
@@ -176,6 +180,8 @@ class ModelTraining():
         
         :return list: List of the loss metrics
         """
+
+        # Need to detach?
         losses = []
         self.macro_precision.reset()
         self.weighted_precision.reset()
@@ -184,8 +190,8 @@ class ModelTraining():
             if self.mod_to_train == 0: # mixed
                 # for batch in tqdm(data, desc = "Validating"):
                 for batch in data:
-                    logits = self.model(batch[0])
-                    labels = batch[1]
+                    logits = self.model(batch[0].to(device))
+                    labels = batch[1].to(device)
                     # self.macro_precision.update(torch.argmax(logits, dim=1), labels)
                     # self.weighted_precision.update(torch.argmax(logits, dim=1), labels)
                     self.macro_precision.update(logits, labels)
@@ -198,22 +204,23 @@ class ModelTraining():
                 # loss = nn.MSELoss()
                 # for batch in tqdm(data, desc = "Validating"):
                 for batch in data: # x, _, y in data: where feat, lab, sent
-                    logits = self.model(batch[0])
-                    embeds = nn.functional.normalize(batch[2])
-                    means.append(MSE(logits, embeds))
-                    sim.append(nn.functional.cosine_similarity(logits, embeds).mean()) #(x, y)
+                    logits = self.model(batch[0].to(device))
+                    embeds = batch[2].to(device)
+                    norm_embeds = nn.functional.normalize(batch[2].to(device))
+                    # means.append(MSE(logits, embeds))
+                    sim.append(nn.functional.cosine_similarity(logits, norm_embeds).mean()) #(x, y)
                 # average = torch.mean(torch.cat(sim, dim=0))
                 # print(f"Cosine similarity: {average}")
                 # losses = [sum(losses)/len(losses)]
                 # losses.append(torch.mean(torch.cat(sim, dim=0)))
                 # sim = [sum(s)/len(s) for s in sim]
                 losses.append(sum(sim)/len(sim))
-                losses.append(sum(means)/len(means))
+                # losses.append(sum(means)/len(means))
             elif self.mod_to_train == 2: # just class
                 # for batch in tqdm(data, desc = "Validating"):
                 for batch in data:
-                    logits = self.model(batch[2])
-                    labels = batch[1]
+                    logits = self.model(batch[2].to(device))
+                    labels = batch[1].to(device)
                     # self.macro_precision.update(torch.argmax(logits, dim=1), labels)
                     # self.weighted_precision.update(torch.argmax(logits, dim=1), labels)
                     self.macro_precision.update(logits, labels)
@@ -223,8 +230,8 @@ class ModelTraining():
             elif self.mod_to_train == 3: # class with concat input
                 # for batch in tqdm(data, desc = "Validating"):
                 for batch in data:
-                    logits = self.model(torch.concat([batch[0],batch[2]], dim=1))
-                    labels = batch[1]
+                    logits = self.model(torch.concat([batch[0].to(device),batch[2].to(device)], dim=1))
+                    labels = batch[1].to(device)
                     # self.macro_precision.update(torch.argmax(logits, dim=1), labels)
                     # self.weighted_precision.update(torch.argmax(logits, dim=1), labels)
                     self.macro_precision.update(logits, labels)
@@ -245,7 +252,8 @@ class ModelTraining():
         epochs:int, 
         # batch_size: int,
         max_norm_value: float = 1.0,
-        # mod_to_train: int = 0
+        # mod_to_train: int = 0,
+        device: str = 'cpu'
     ): 
         """
         :param ```nn.Module``` model: Model to train and validate 
@@ -260,7 +268,7 @@ class ModelTraining():
         self.loss_name = loss_fn._get_name()
         self.epochs = epochs
         # print(f'batch: {self.batch_size}')
-        print(summary(self.model, input_size=(self.batch_size, self.model.dim_in))) 
+        # print(summary(self.model, input_size=(self.batch_size, self.model.dim_in), device=device))
         # macro_precision = Precision(task="multiclass", average="macro", num_classes=num_classes)
         # weighted_precision = Precision(task="multiclass", average="weighted", num_classes=num_classes)
         # cosine_sim = lambda x, y : nn.functional.cosine_similarity(x, y)
@@ -271,18 +279,19 @@ class ModelTraining():
         for _ in tqdm(range(epochs), desc="Epochs"): 
             # print("-"*25, f"Epoch: {epoch+1}", "-"*25)
             # print('ready to train')
-            self.training_loop(opt, loss_fn, train_data, max_norm_value=max_norm_value) #self.model, , self.mod_to_train
+            self.training_loop(opt, loss_fn, train_data, max_norm_value=max_norm_value, device=device) #self.model, , self.mod_to_train
             # print()
-            metrics = self.validation(val_data) # self.model, macro_precision, weighted_precision, cosine_sim, MSE, mod_to_train
+            metrics = self.validation(val_data, device=device) # self.model, macro_precision, weighted_precision, cosine_sim, MSE, mod_to_train
             # self.loss.append(losses)
-            self.metric[0].append(metrics[0])
-            self.metric[1].append(metrics[1])
+            self.metric[0].append(metrics[0].cpu())
+            if len(metrics) == 2:self.metric[1].append(metrics[1].cpu())
+            # trial
             # if len(losses) == 1:
             #     print(F"Validation loss: {losses[0]}")
             # elif len(losses) == 2:
             #     print(F"Validation Macro precision: {losses[0]}\nValidation Weighted precision: {losses[1]}")
             # else: raise ValueError()
-            self.save_best(metrics[0], metrics[1])
+            self.save_best(metrics[0]) #, metrics[1]
             self.macro_precision.reset()
             self.weighted_precision.reset() 
         return self.model
@@ -309,17 +318,24 @@ class ModelTraining():
     ):
         # plt.plot([i for i in range(epochs)], self.loss)
         fig, ax1 = plt.subplots() #figsize
-        # for i, metric in enumerate(self.metric()):
+            # for i, metric in enumerate(self.metric()):
         ax1.plot([j+1 for j in range(self.epochs)], self.metric[0], label=self.metric_names[0], color='tab:red')
         ax1.set_xlabel('Epochs')
         ax1.set_ylabel(self.metric_names[0], color='tab:red') #, color='tab::red'
         ax1.tick_params(axis='y', color='tab:red') # color
-        ax2 = ax1.twinx()
+        if len(self.metric[1]) > 0:
+            ax2 = ax1.twinx()
 
-        ax2.plot([j+1 for j in range(self.epochs)], self.metric[1], label=self.metric_names[1], color='tab:blue')
-        # ax2.set_xlabel('Epochs')
-        ax2.set_ylabel(self.metric_names[1], color='tab:blue') #, color='tab::red'
-        ax2.tick_params(axis='y', color='tab:blue') # color 
+            ax2.plot([j+1 for j in range(self.epochs)], self.metric[1], label=self.metric_names[1], color='tab:blue')
+            # ax2.set_xlabel('Epochs')
+            ax2.set_ylabel(self.metric_names[1], color='tab:blue') #, color='tab::red'
+            ax2.tick_params(axis='y', color='tab:blue') # color 
+
+        # else: 
+        #     ax1.plot([j+1 for j in range(self.epochs)], self.metric, label=self.metric_names[0], color='tab:red')
+        #     ax1.set_xlabel('Epochs')
+        #     ax1.set_ylabel(self.metric_names[0], color='tab:red') #, color='tab::red'
+        #     ax1.tick_params(axis='y', color='tab:red') # color
 
         fig.tight_layout() 
         # plt.title(title) 
@@ -332,14 +348,19 @@ class ModelTraining():
         plt.title(f'{self.model._get_name()} Validation Metrics')
         plt.show()
 
-
-    def save_best(self, metric1, metric2):
-        # print(f'met1: {metric1}\nself: {self.best_metric[0]}')
-        if (metric1 > self.best_metric[0] and metric2 >= self.best_metric[1]) or (metric2 > self.best_metric[1] and metric1 >= self.best_metric[0]):
-            self.best_metric[0] = metric1
-            self.best_metric[1] = metric2
-            # self.best_mod = self.model.state_dict()
+    def save_best(self, metric):
+        if metric > self.best_metric[0]:
+            self.best_metric[0] = metric
             torch.save(self.model.state_dict(), f'best_models/best_{self.model._get_name()}_model.pt')
+
+
+    # def save_best(self, metric1, metric2):
+    #     # print(f'met1: {metric1}\nself: {self.best_metric[0]}')
+    #     if (metric1 > self.best_metric[0] and metric2 >= self.best_metric[1]) or (metric2 > self.best_metric[1] and metric1 >= self.best_metric[0]):
+    #         self.best_metric[0] = metric1
+    #         self.best_metric[1] = metric2
+    #         # self.best_mod = self.model.state_dict()
+    #         torch.save(self.model.state_dict(), f'best_models/best_{self.model._get_name()}_model.pt')
 
 
     def learned_params(self):
@@ -348,12 +369,14 @@ class ModelTraining():
                 print(name, param.grad)
 
 
-    def check_preds(self, dataloader):
+    def check_preds(self, dataloader, mod = 0, device='cpu'):
         outputs = []
         self.model.eval()
         with torch.no_grad():
             for batch in dataloader:
-                output = self.model(torch.tensor([instance for instance in batch[0]])) 
+                output = self.model(torch.stack([torch.tensor(instance) for instance in batch[mod]]).to(device)) 
                 outputs.append(torch.argmax(output, dim=1))
-        print(torch.bincount(outputs))
+
+        
+        print(torch.bincount(torch.cat(outputs, dim=0),  minlength=11))
 
